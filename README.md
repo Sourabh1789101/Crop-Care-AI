@@ -303,4 +303,183 @@ This project is open source and available under the [MIT License](LICENSE).
 ---
 
 **Built with ❤️ for farmers** | **Low-cost • Scalable • Open Source**
-# Crop-Care-AI
+# Crop-Care-AI — Farmer-First Microservices
+
+**Enhanced WhatsApp Agricultural AI Assistant with Microservices Architecture**
+
+## 🌾 **Overview**
+
+Crop-Care-AI provides practical decision support for farmers through:
+- 📱 **WhatsApp & Telegram Bots** - Natural language agricultural assistance
+- 🔍 **Disease Detection** - AI-powered crop disease identification from photos  
+- 📊 **Yield Prediction** - Data-driven crop yield forecasting
+- 💡 **Smart Recommendations** - Actionable farming advice
+- 🌤️ **Weather Integration** - Agricultural weather alerts and insights
+
+## 🏗️ **Architecture**
+
+Microservices-based architecture with independent, scalable services:
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   WhatsApp Bot  │    │   Telegram Bot   │    │    Web App      │
+└─────────┬───────┘    └─────────┬────────┘    └─────────┬───────┘
+          │                      │                       │
+          └──────────────────────┼───────────────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │      API Gateway        │
+                    │        (8080)           │
+                    └─────────────┬───────────┘
+                                  │
+        ┌─────────────────────────┼─────────────────────────┐
+        │                         │                         │
+┌───────▼────────┐    ┌──────────▼───────┐    ┌───────────▼────┐
+│ Disease Detect │    │ Yield Prediction │    │ Recommendation │
+│     (8001)     │    │      (8002)      │    │     (8003)     │
+└────────────────┘    └──────────────────┘    └────────────────┘
+        │                         │                         │
+        └─────────────────────────┼─────────────────────────┘
+                                  │
+                    ┌─────────────▼───────────┐
+                    │   MongoDB + Redis       │
+                    │   (Data & Cache)        │
+                    └─────────────────────────┘
+```
+
+## 🚀 **Quick Start**
+
+### Prerequisites
+- Docker & Docker Compose
+- Node.js 18+ (for API Gateway)
+- Python 3.11+ (for services)
+
+### 1. Clone and Setup
+```bash
+git clone https://github.com/Sourabh1789101/Crop-Care-AI.git
+cd Crop-Care-AI
+cp deployment/.env.example deployment/.env
+# Edit deployment/.env with your API keys and tokens
+```
+
+### 2. Start Services
+```bash
+cd deployment
+docker compose up --build
+```
+
+### 3. Access Services
+- **API Gateway**: http://localhost:8080
+- **Web App**: http://localhost:3000  
+- **Disease Detection**: http://localhost:8001
+- **Yield Prediction**: http://localhost:8002
+- **WhatsApp Bot**: http://localhost:8011
+- **Telegram Bot**: http://localhost:8012
+
+## 📱 **Bot Setup**
+
+### WhatsApp Bot
+1. Create Meta App with WhatsApp Business API
+2. Set environment variables in `deployment/.env`:
+   ```
+   WHATSAPP_ACCESS_TOKEN=your_token
+   WHATSAPP_PHONE_NUMBER_ID=your_id  
+   WHATSAPP_VERIFY_TOKEN=your_secret
+   ```
+3. Configure webhook: `https://your-domain/webhooks/whatsapp`
+
+### Telegram Bot  
+1. Create bot with @BotFather
+2. Set environment variables:
+   ```
+   TELEGRAM_BOT_TOKEN=your_bot_token
+   ```
+3. Set webhook: `https://your-domain/webhooks/telegram`
+
+See [docs/bots/SETUP.md](docs/bots/SETUP.md) for detailed instructions.
+
+## 💬 **Natural Language Examples**
+
+Farmers can chat naturally with the bots:
+
+```
+🌤️ "weather in my area 390001"
+🌱 "what crop should i grow"  
+🌿 "fertilizer for wheat farming"
+💰 "rice market prices today"
+❓ "help me with organic farming"
+```
+
+## 🔧 **Services**
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| **api-gateway** | 8080 | Request routing & authentication |
+| **disease-detection** | 8001 | AI crop disease identification |
+| **yield-prediction** | 8002 | Data-driven yield forecasting |
+| **recommendation** | 8003 | Actionable farming advice |
+| **notification** | 8004 | Push, SMS, and alerts |
+| **weather** | 8005 | Agricultural weather data |
+| **user-management** | 8006 | Authentication & user profiles |
+| **whatsapp-bot** | 8011 | WhatsApp Business API integration |
+| **telegram-bot** | 8012 | Telegram Bot API integration |
+
+## 📊 **API Examples**
+
+### Disease Detection
+```bash
+curl -X POST http://localhost:8080/api/v1/diseases/detect \
+  -F "file=@crop_image.jpg"
+```
+
+### Yield Prediction  
+```bash
+curl -X POST http://localhost:8080/api/v1/yields/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "crop_type": "rice",
+    "soil_data": {"nitrogen": 40, "phosphorus": 30, "potassium": 40, "ph": 6.5},
+    "weather_data": {"average_temperature": 25, "total_rainfall": 1000, "average_humidity": 60}
+  }'
+```
+
+## 🎯 **Key Features**
+
+- ✅ **Natural Language Processing** - 15+ farming query patterns
+- ✅ **Multi-Channel Support** - WhatsApp, Telegram, Web, Mobile
+- ✅ **AI Disease Detection** - TensorFlow-based image classification
+- ✅ **Smart Yield Prediction** - Scikit-learn models with soil/weather data
+- ✅ **Real-time Weather** - Agricultural weather integration
+- ✅ **Offline-First Mobile** - Works in low connectivity areas
+- ✅ **Scalable Architecture** - Kubernetes-ready microservices
+- ✅ **Production Ready** - Docker, CI/CD, monitoring
+
+## 📚 **Documentation**
+
+- [Architecture Overview](docs/architecture/)
+- [Bot Setup Guide](docs/bots/SETUP.md)
+- [API Documentation](docs/api/)
+- [Development Guide](docs/development/)
+- [Deployment Guide](docs/deployment/)
+
+## 🌟 **Impact**
+
+**Transforming agriculture through AI-powered assistance accessible via simple WhatsApp chat!**
+
+- 🎯 **Immediate**: Farmers get instant advice
+- 🎯 **Scalable**: Ready for thousands of farmers  
+- 🎯 **Accessible**: No technical barriers
+- 🎯 **Intelligent**: AI-powered recommendations
+
+---
+
+## 📞 **Support**
+
+For issues and questions:
+- Create an issue in this repository
+- Check [docs/troubleshooting/](docs/troubleshooting/)
+- Contact: [your-email@domain.com]
+
+## 📄 **License**
+
+MIT License - see [LICENSE](LICENSE) file for details.
