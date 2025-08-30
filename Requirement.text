@@ -1,0 +1,888 @@
+# SmartCropAdvisory — Full Codebase
+
+Below is a minimal-but-complete, low-cost prototype you can run locally and deploy. It includes:
+- FastAPI backend with endpoints for crop recommendation, fertilizer guidance, disease detection (stub/optional), weather, and market prices.
+- Lightweight PWA frontend (vanilla JS modules) with offline support and basic voice input.
+- Optional Telegram chatbot wired to the same backend.
+- Deployment artifacts (Dockerfile + sample serverless.yml) and docs.
+
+> Tip: Start backend first (`uvicorn backend.app:app --reload`), then open `frontend/index.html` via a local web server (e.g., `npx serve frontend`).
+
+---
+
+## 📁 Project Tree
+```
+SmartCropAdvisory/
+│── backend/
+│   ├── app.py
+│   ├── models/
+│   │   ├── crop_model.pkl
+│   │   └── fertilizer_model.pkl
+│   ├── utils/
+│   │   ├── weather_api.py
+│   │   ├── market_api.py
+│   │   └── soil_helper.py
+│   ├── sample_data/
+│   │   └── crop_reco_sample.csv
+│   └── requirements.txt
+│
+│── frontend/
+│   ├── index.html
+│   ├── app.js
+│   ├── service-worker.js
+│   ├── styles.css
+│   └── components/
+│       ├── CropAdvisor.js
+│       ├── FertilizerAdvisor.js
+│       ├── DiseaseDetector.js
+│       ├── WeatherAlert.js
+│       └── MarketPrices.js
+│
+│── chatbot/
+│   └── telegram_bot.py
+│
+│── docs/
+│   ├── README.md
+│   └── SIH_submission.md
+│
+└── deploy/
+    ├── Dockerfile
+    └── serverless.yml
+```
+
+---
+
+## backend/requirements.txt
+```txt
+fastapi==0.110.2
+uvicorn==0.29.0
+pydantic==2.7.1
+python-multipart==0.0.9
+pillow==10.3.0
+numpy==1.26.4
+scikit-learn==1.4.2
+requests==2.31.0
+python-dotenv==1.0.1
+```
+
+---
+
+## backend/utils/soil_helper.py
+```python
+from typing import Dict
+
+SOIL_NORM = {
+    "ph": (6.0, 7.5),
+    "N": (50, 120),
+    "P": (30, 60),
+    "K": (30, 60),
+}
+
+FERTILIZER_GUIDE = {
+    # very simplified demo values (kg/acre)
+    "rice": {"urea": 50, "dap": 40, "mop": 20},
+    "wheat": {"urea": 45, "dap": 35, "mop": 25},
+    "maize": {"urea": 55, "dap": 45, "mop": 25},
+}
+
+CORRECTION_TIPS = {
+    "low_N": "Add urea or FYM; grow legumes in rotation.",
+    "high_N": "Reduce urea; split applications.",
+    "low_P": "Apply DAP/SSP; avoid waterlogging.",
+    "high_P": "Avoid excess P; use organic matter.",
+    "low_K": "Apply MOP; incorporate crop residues.",
+    "high_K": "Avoid KCl overuse; balance N and P.",
+    "low_ph": "Apply agricultural lime as per recommendation.",
+    "high_ph": "Add organic manure/gypsum; avoid over-liming.",
+}
+
+def analyze_soil(soil: Dict) -> Dict:
+    report = {"warnings": [], "status": {}}
+    for k, (lo, hi) in SOIL_NORM.items():
+        val = soil.get(k)
+        if val is None:
+            continue
+        if val < lo:
+            if k == "ph":
+                report["warnings"].append(CORRECTION_TIPS["low_ph"])
+            else:
+                report["warnings"].append(CORRECTION_TIPS[f"low_{k}"])
+            report["status"][k] = "low"
+        elif val > hi:
+            if k == "ph":
+                report["warnings"].append(CORRECTION_TIPS["high_ph"])
+            else:
+                report["warnings"].append(CORRECTION_TIPS[f"high_{k}"])
+            report["status"][k] = "high"
+        else:
+            report["status"][k] = "ok"
+    return report
+
+
+def fertilizer_plan(crop: str, soil: Dict) -> Dict:
+    base = FERTILIZER_GUIDE.get(crop.lower())
+    if not base:
+        base = {"urea": 40, "dap": 30, "mop": 20}
+    analysis = analyze_soil(soil)
+    adj = base.copy()
+
+    # very simple adjustments (+/- 10%)
+    if analysis["status"].get("N") == "low":
+        adj["urea"] = round(adj["urea"] * 1.1, 1)
+    if analysis["status"].get("N") == "high":
+        adj["urea"] = round(adj["urea"] * 0.9, 1)
+    if analysis["status"].get("P") == "low":
+        adj["dap"] = round(adj["dap"] * 1.1, 1)
+    if analysis["status"].get("P") == "high":
+        adj["dap"] = round(adj["dap"] * 0.9, 1)
+    if analysis["status"].get("K") == "low":
+        adj["mop"] = round(adj["mop"] * 1.1, 1)
+    if analysis["status"].get("K") == "high":
+        adj["mop"] = round(adj["mop"] * 0.9, 1)
+
+    return {"base": base, "adjusted": adj, "notes": analysis["warnings"]}
+```
+
+---
+
+## backend/utils/weather_api.py
+```python
+import os
+import requests
+from typing import Dict
+
+OPENWEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
+FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast"
+
+class WeatherClient:
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or os.getenv("OPENWEATHER_API_KEY")
+        if not self.api_key:
+            raise RuntimeError("Set OPENWEATHER_API_KEY env var")
+
+    def current_by_pincode(self, pincode: str, country: str = "IN") -> Dict:
+        params = {"zip": f"{pincode},{country}", "appid": self.api_key, "units": "metric"}
+        r = requests.get(OPENWEATHER_URL, params=params, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
+    def forecast_by_pincode(self, pincode: str, country: str = "IN") -> Dict:
+        params = {"zip": f"{pincode},{country}", "appid": self.api_key, "units": "metric"}
+        r = requests.get(FORECAST_URL, params=params, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
+    @staticmethod
+    def simple_alerts(current: Dict) -> list[str]:
+        alerts = []
+        rain = 0.0
+        if "rain" in current:
+            rain = current.get("rain", {}).get("1h", 0.0)
+        wind = current.get("wind", {}).get("speed", 0.0)
+        temp = current.get("main", {}).get("temp", 25)
+        if rain >= 2:
+            alerts.append("Heavy rain alert: postpone spraying.")
+        if wind >= 10:
+            alerts.append("High wind alert: avoid pesticide spraying.")
+        if temp >= 38:
+            alerts.append("Heat alert: irrigate during evening/morning.")
+        return alerts
+```
+
+---
+
+## backend/utils/market_api.py
+```python
+from datetime import datetime
+from typing import Dict, List
+
+# In production, integrate Agmarknet/eNAM official APIs.
+# For hackathon, we provide a mock with a few crops and prices.
+
+MOCK_PRICES = [
+    {"market": "Ahmedabad (APMC)", "crop": "wheat", "modal_price": 2250, "unit": "INR/qtl"},
+    {"market": "Surat (APMC)", "crop": "cotton", "modal_price": 6500, "unit": "INR/qtl"},
+    {"market": "Pune (APMC)", "crop": "tomato", "modal_price": 1200, "unit": "INR/qtl"},
+    {"market": "Indore (APMC)", "crop": "soybean", "modal_price": 4800, "unit": "INR/qtl"},
+]
+
+
+def get_prices(crop: str | None = None, state: str | None = None) -> Dict:
+    items: List[Dict] = MOCK_PRICES
+    if crop:
+        items = [x for x in items if x["crop"].lower() == crop.lower()]
+    # state filtering omitted in mock
+    return {"as_of": datetime.utcnow().isoformat() + "Z", "results": items}
+```
+
+---
+
+## backend/app.py
+```python
+import os
+import io
+import pickle
+from typing import Optional
+
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from PIL import Image
+import numpy as np
+
+from utils.soil_helper import fertilizer_plan
+from utils.market_api import get_prices
+
+# Optional: weather (requires env var OPENWEATHER_API_KEY)
+WEATHER_ENABLED = True
+try:
+    from utils.weather_api import WeatherClient
+    weather_client = WeatherClient()
+except Exception:
+    WEATHER_ENABLED = False
+    weather_client = None
+
+app = FastAPI(title="Smart Crop Advisory API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -------------------- Models -------------------- #
+CROP_MODEL = None
+FERT_MODEL = None
+
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+try:
+    with open(os.path.join(MODELS_DIR, "crop_model.pkl"), "rb") as f:
+        CROP_MODEL = pickle.load(f)
+except Exception:
+    CROP_MODEL = None
+
+try:
+    with open(os.path.join(MODELS_DIR, "fertilizer_model.pkl"), "rb") as f:
+        FERT_MODEL = pickle.load(f)
+except Exception:
+    FERT_MODEL = None
+
+# -------------------- Schemas -------------------- #
+class SoilInput(BaseModel):
+    N: float
+    P: float
+    K: float
+    ph: float
+    rainfall: Optional[float] = 100
+    soil_type: Optional[str] = "loam"
+    location: Optional[str] = None  # pincode or lat,long
+
+class CropRecoRequest(SoilInput):
+    pass
+
+class FertRequest(SoilInput):
+    crop: str
+
+# -------------------- Routes -------------------- #
+@app.get("/health")
+async def health():
+    return {"status": "ok", "weather": WEATHER_ENABLED}
+
+@app.post("/recommend_crop")
+async def recommend_crop(payload: CropRecoRequest):
+    features = np.array([[payload.N, payload.P, payload.K, payload.ph, payload.rainfall]])
+    if CROP_MODEL is not None:
+        pred = CROP_MODEL.predict(features)[0]
+        proba = getattr(CROP_MODEL, "predict_proba", None)
+        conf = float(max(proba(features)[0])) if proba else 0.75
+        return {"crop": str(pred), "confidence": round(conf, 3)}
+    # Fallback heuristic
+    ph = payload.ph
+    if 6.0 <= ph <= 7.5:
+        guess = "wheat"
+    elif ph < 6.0:
+        guess = "rice"
+    else:
+        guess = "maize"
+    return {"crop": guess, "confidence": 0.6, "note": "heuristic fallback (train and drop crop_model.pkl to enable ML)"}
+
+@app.post("/recommend_fertilizer")
+async def recommend_fertilizer(payload: FertRequest):
+    soil = payload.model_dump()
+    soil.pop("crop", None)
+    plan = fertilizer_plan(payload.crop, soil)
+    return {"crop": payload.crop, **plan}
+
+@app.post("/detect_disease")
+async def detect_disease(file: UploadFile = File(...)):
+    try:
+        img_bytes = await file.read()
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB").resize((64, 64))
+        arr = np.array(img).astype(np.float32) / 255.0
+        mean_green = float(arr[:, :, 1].mean())
+        # Very naive heuristic: greener → "healthy" else "leaf_blight"
+        if mean_green > 0.35:
+            label = "healthy"
+            conf = 0.7
+        else:
+            label = "leaf_blight_suspected"
+            conf = 0.65
+        remedy = "Use copper-based fungicide; remove affected leaves; avoid overhead irrigation."
+        if label == "healthy":
+            remedy = "No action needed; maintain regular scouting."
+        return {"label": label, "confidence": round(conf, 3), "remedy": remedy}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {e}")
+
+@app.get("/weather")
+async def weather(pincode: str):
+    if not WEATHER_ENABLED:
+        return {"error": "Weather disabled. Set OPENWEATHER_API_KEY env var."}
+    current = weather_client.current_by_pincode(pincode)
+    alerts = weather_client.simple_alerts(current)
+    return {"current": current, "alerts": alerts}
+
+@app.get("/market")
+async def market(crop: Optional[str] = None, state: Optional[str] = None):
+    return get_prices(crop=crop, state=state)
+
+@app.get("/languages")
+async def languages():
+    return {"supported": ["en", "hi", "gu", "mr", "bn", "ta", "te", "kn", "pa"]}
+```
+
+---
+
+## backend/sample_data/crop_reco_sample.csv
+```csv
+N,P,K,ph,rainfall,crop
+90,42,43,6.4,120,wheat
+80,40,40,5.6,200,rice
+100,50,50,7.8,90,maize
+```
+
+---
+
+## frontend/index.html
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Crop Advisory</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Smart Crop Advisory</h1>
+    <p class="muted">Low-cost PWA — works offline</p>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="crop">Crop Advisor</button>
+    <button data-tab="fert">Fertilizer</button>
+    <button data-tab="disease">Disease</button>
+    <button data-tab="weather">Weather</button>
+    <button data-tab="market">Market Prices</button>
+  </nav>
+
+  <main id="view"></main>
+
+  <footer>
+    <small>© Hackathon Prototype | Backend: <code>http://localhost:8000</code></small>
+    <button id="voiceBtn">🎙️ Voice (beta)</button>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'));
+    }
+  </script>
+</body>
+</html>
+```
+
+---
+
+## frontend/styles.css
+```css
+:root{ --bg:#0b1220; --card:#121a2b; --text:#ecf1ff; --muted:#8ea0c2; --accent:#6ee7b7 }
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Inter,sans-serif}
+header{padding:16px 20px;border-bottom:1px solid #1e2b47}
+h1{margin:0} .muted{color:var(--muted)}
+.tabs{display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid #1e2b47}
+.tabs button{background:var(--card);color:var(--text);border:1px solid #233153;padding:8px 12px;border-radius:12px;cursor:pointer}
+main{padding:20px;display:grid;gap:16px;max-width:880px;margin:auto}
+.card{background:var(--card);border:1px solid #233153;border-radius:16px;padding:16px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+label{display:block;margin:8px 0 4px;color:var(--muted)} input,select{width:100%;padding:10px;border-radius:10px;border:1px solid #314166;background:#0e1729;color:var(--text)}
+button.primary{background:var(--accent);color:#062b1f;border:0;padding:10px 16px;border-radius:12px;font-weight:600;cursor:pointer}
+pre{white-space:pre-wrap;word-wrap:break-word}
+footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid #1e2b47}
+img.preview{max-width:100%;border-radius:12px;border:1px solid #233153}
+```
+
+---
+
+## frontend/app.js
+```javascript
+import { renderCropAdvisor } from './components/CropAdvisor.js'
+import { renderFertilizer } from './components/FertilizerAdvisor.js'
+import { renderDisease } from './components/DiseaseDetector.js'
+import { renderWeather } from './components/WeatherAlert.js'
+import { renderMarket } from './components/MarketPrices.js'
+
+const API = localStorage.getItem('API_BASE') || 'http://localhost:8000'
+const view = document.getElementById('view')
+
+function setTab(tab){
+  if(tab==='crop') renderCropAdvisor(view, API)
+  if(tab==='fert') renderFertilizer(view, API)
+  if(tab==='disease') renderDisease(view, API)
+  if(tab==='weather') renderWeather(view, API)
+  if(tab==='market') renderMarket(view, API)
+}
+
+// default
+setTab('crop')
+
+document.querySelectorAll('.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=> setTab(btn.dataset.tab))
+})
+
+// Basic Voice input (Web Speech API)
+const voiceBtn = document.getElementById('voiceBtn')
+let recognizing = false
+let recognizer
+if('webkitSpeechRecognition' in window){
+  recognizer = new webkitSpeechRecognition()
+  recognizer.lang = 'en-IN'
+  recognizer.continuous = false
+  recognizer.interimResults = false
+  recognizer.onresult = (e)=>{
+    const text = e.results[0][0].transcript.toLowerCase()
+    // simple intents
+    if(text.includes('weather')) setTab('weather')
+    else if(text.includes('market')) setTab('market')
+    else if(text.includes('disease')) setTab('disease')
+    else if(text.includes('fertilizer')) setTab('fert')
+    else setTab('crop')
+  }
+  voiceBtn.onclick = ()=>{
+    if(recognizing){ recognizer.stop(); recognizing=false; voiceBtn.textContent='🎙️ Voice (beta)'; return }
+    recognizer.start(); recognizing=true; voiceBtn.textContent='🛑 Stop Voice'
+  }
+}else{
+  voiceBtn.disabled = true
+  voiceBtn.title = 'Speech recognition not supported'
+}
+```
+
+---
+
+## frontend/components/CropAdvisor.js
+```javascript
+export function renderCropAdvisor(root, API){
+  root.innerHTML = `
+    <section class="card">
+      <h2>Crop Recommendation</h2>
+      <form id="cropForm">
+        <label>N (kg/ha)</label>
+        <input type="number" step="0.1" name="N" value="90" required>
+        <label>P (kg/ha)</label>
+        <input type="number" step="0.1" name="P" value="42" required>
+        <label>K (kg/ha)</label>
+        <input type="number" step="0.1" name="K" value="43" required>
+        <label>Soil pH</label>
+        <input type="number" step="0.1" name="ph" value="6.5" required>
+        <label>Rainfall (mm)</label>
+        <input type="number" step="0.1" name="rainfall" value="120">
+        <button class="primary" type="submit">Recommend Crop</button>
+      </form>
+      <pre id="cropOut"></pre>
+    </section>
+  `
+
+  const form = root.querySelector('#cropForm')
+  const out = root.querySelector('#cropOut')
+  form.onsubmit = async (e)=>{
+    e.preventDefault()
+    const payload = Object.fromEntries(new FormData(form).entries())
+    for(const k of ['N','P','K','ph','rainfall']) payload[k] = Number(payload[k])
+    out.textContent = 'Loading...'
+    try{
+      const r = await fetch(`${API}/recommend_crop`,{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
+      const data = await r.json()
+      out.textContent = JSON.stringify(data, null, 2)
+    }catch(err){ out.textContent = 'Error: '+err }
+  }
+}
+```
+
+---
+
+## frontend/components/FertilizerAdvisor.js
+```javascript
+export function renderFertilizer(root, API){
+  root.innerHTML = `
+    <section class="card">
+      <h2>Fertilizer Guidance</h2>
+      <form id="fertForm">
+        <label>Crop</label>
+        <select name="crop">
+          <option>wheat</option>
+          <option>rice</option>
+          <option>maize</option>
+        </select>
+        <label>N (kg/ha)</label>
+        <input type="number" step="0.1" name="N" value="90" required>
+        <label>P (kg/ha)</label>
+        <input type="number" step="0.1" name="P" value="42" required>
+        <label>K (kg/ha)</label>
+        <input type="number" step="0.1" name="K" value="43" required>
+        <label>Soil pH</label>
+        <input type="number" step="0.1" name="ph" value="6.5" required>
+        <button class="primary" type="submit">Get Plan</button>
+      </form>
+      <pre id="fertOut"></pre>
+    </section>
+  `
+  const form = root.querySelector('#fertForm')
+  const out = root.querySelector('#fertOut')
+  form.onsubmit = async (e)=>{
+    e.preventDefault()
+    const payload = Object.fromEntries(new FormData(form).entries())
+    for(const k of ['N','P','K','ph']) payload[k] = Number(payload[k])
+    out.textContent = 'Loading...'
+    try{
+      const r = await fetch(`${API}/recommend_fertilizer`,{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
+      const data = await r.json()
+      out.textContent = JSON.stringify(data, null, 2)
+    }catch(err){ out.textContent = 'Error: '+err }
+  }
+}
+```
+
+---
+
+## frontend/components/DiseaseDetector.js
+```javascript
+export function renderDisease(root, API){
+  root.innerHTML = `
+    <section class="card">
+      <h2>Pest / Disease Detection</h2>
+      <form id="imgForm">
+        <input type="file" name="img" accept="image/*" capture="environment" required />
+        <button class="primary" type="submit">Analyze</button>
+      </form>
+      <img class="preview" id="prev" />
+      <pre id="imgOut"></pre>
+    </section>
+  `
+  const form = root.querySelector('#imgForm')
+  const out = root.querySelector('#imgOut')
+  const prev = root.querySelector('#prev')
+
+  form.img.onchange = ()=>{
+    const f = form.img.files[0]
+    if(f) prev.src = URL.createObjectURL(f)
+  }
+
+  form.onsubmit = async (e)=>{
+    e.preventDefault()
+    out.textContent = 'Uploading...'
+    const fd = new FormData()
+    fd.append('file', form.img.files[0])
+    try{
+      const r = await fetch(`${API}/detect_disease`,{method:'POST', body: fd})
+      const data = await r.json()
+      out.textContent = JSON.stringify(data, null, 2)
+    }catch(err){ out.textContent = 'Error: '+err }
+  }
+}
+```
+
+---
+
+## frontend/components/WeatherAlert.js
+```javascript
+export function renderWeather(root, API){
+  root.innerHTML = `
+    <section class="card">
+      <h2>Weather & Alerts</h2>
+      <form id="wform">
+        <label>Pincode</label>
+        <input name="pincode" value="390001" />
+        <button class="primary">Get Weather</button>
+      </form>
+      <pre id="wout"></pre>
+    </section>
+  `
+  const form = root.querySelector('#wform')
+  const out = root.querySelector('#wout')
+  form.onsubmit = async (e)=>{
+    e.preventDefault()
+    out.textContent = 'Loading...'
+    try{
+      const r = await fetch(`${API}/weather?pincode=${encodeURIComponent(form.pincode.value)}`)
+      const data = await r.json()
+      out.textContent = JSON.stringify(data, null, 2)
+    }catch(err){ out.textContent = 'Error: '+err }
+  }
+}
+```
+
+---
+
+## frontend/components/MarketPrices.js
+```javascript
+export function renderMarket(root, API){
+  root.innerHTML = `
+    <section class="card">
+      <h2>Market Prices (Mock)</h2>
+      <form id="mform">
+        <label>Crop</label>
+        <input name="crop" placeholder="wheat" />
+        <button class="primary">Fetch</button>
+      </form>
+      <pre id="mout"></pre>
+    </section>
+  `
+  const form = root.querySelector('#mform')
+  const out = root.querySelector('#mout')
+  form.onsubmit = async (e)=>{
+    e.preventDefault()
+    out.textContent = 'Loading...'
+    const crop = form.crop.value.trim()
+    const url = crop ? `${API}/market?crop=${encodeURIComponent(crop)}` : `${API}/market`
+    try{
+      const r = await fetch(url)
+      const data = await r.json()
+      out.textContent = JSON.stringify(data, null, 2)
+    }catch(err){ out.textContent = 'Error: '+err }
+  }
+}
+```
+
+---
+
+## frontend/service-worker.js
+```javascript
+const CACHE = 'sca-v1'
+const ASSETS = [
+  '/', '/index.html', '/app.js', '/styles.css',
+  '/components/CropAdvisor.js', '/components/FertilizerAdvisor.js', '/components/DiseaseDetector.js', '/components/WeatherAlert.js', '/components/MarketPrices.js'
+]
+self.addEventListener('install', e=>{
+  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))
+})
+self.addEventListener('fetch', e=>{
+  e.respondWith(caches.match(e.request).then(r=> r || fetch(e.request)))
+})
+```
+
+---
+
+## chatbot/telegram_bot.py
+```python
+import os
+import requests
+from functools import partial
+from typing import Final
+
+# pip install python-telegram-bot==13.15
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+
+API_BASE: Final[str] = os.getenv("API_BASE", "http://localhost:8000")
+TOKEN: Final[str] = os.getenv("TELEGRAM_BOT_TOKEN", "")
+
+HELP = (
+    "Commands:\n"
+    "/start - intro\n"
+    "/crop N P K pH rainfall - recommend crop (e.g., /crop 90 42 43 6.5 120)\n"
+    "/fert crop N P K pH - fertilizer plan (e.g., /fert wheat 90 42 43 6.5)\n"
+    "/weather pincode - get weather alerts (e.g., /weather 390001)\n"
+    "/market [crop] - mandi prices (e.g., /market wheat)\n"
+)
+
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Smart Crop Advisory Bot\n" + HELP)
+
+def crop_cmd(update: Update, context: CallbackContext):
+    try:
+        N, P, K, ph, rainfall = map(float, context.args)
+        payload = {"N":N,"P":P,"K":K,"ph":ph,"rainfall":rainfall}
+        r = requests.post(f"{API_BASE}/recommend_crop", json=payload, timeout=10)
+        update.message.reply_text(r.text)
+    except Exception as e:
+        update.message.reply_text(f"Usage: /crop N P K pH rainfall\nError: {e}")
+
+def fert_cmd(update: Update, context: CallbackContext):
+    try:
+        crop = context.args[0]
+        N, P, K, ph = map(float, context.args[1:])
+        payload = {"crop":crop, "N":N,"P":P,"K":K,"ph":ph}
+        r = requests.post(f"{API_BASE}/recommend_fertilizer", json=payload, timeout=10)
+        update.message.reply_text(r.text)
+    except Exception as e:
+        update.message.reply_text(f"Usage: /fert crop N P K pH\nError: {e}")
+
+def weather_cmd(update: Update, context: CallbackContext):
+    try:
+        pin = context.args[0]
+        r = requests.get(f"{API_BASE}/weather", params={"pincode": pin}, timeout=10)
+        update.message.reply_text(r.text)
+    except Exception as e:
+        update.message.reply_text(f"Usage: /weather pincode\nError: {e}")
+
+def market_cmd(update: Update, context: CallbackContext):
+    crop = context.args[0] if context.args else None
+    r = requests.get(f"{API_BASE}/market", params={"crop": crop} if crop else None, timeout=10)
+    update.message.reply_text(r.text)
+
+def main():
+    if not TOKEN:
+        print("Set TELEGRAM_BOT_TOKEN env var")
+        return
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(CommandHandler('crop', crop_cmd))
+    dp.add_handler(CommandHandler('fert', fert_cmd))
+    dp.add_handler(CommandHandler('weather', weather_cmd))
+    dp.add_handler(CommandHandler('market', market_cmd))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, lambda u,c: u.message.reply_text(HELP)))
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
+```
+
+---
+
+## deploy/Dockerfile
+```dockerfile
+# Simple backend container
+FROM python:3.11-slim
+WORKDIR /app
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend /app
+ENV PORT=8000
+EXPOSE 8000
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+---
+
+## deploy/serverless.yml
+```yaml
+service: smart-crop-advisory
+provider:
+  name: aws
+  runtime: python3.11
+  region: ap-south-1
+  environment:
+    OPENWEATHER_API_KEY: ${env:OPENWEATHER_API_KEY}
+functions:
+  api:
+    handler: app.app
+    events:
+      - httpApi: '*'
+plugins:
+  - serverless-wsgi
+  - serverless-python-requirements
+custom:
+  wsgi:
+    app: app.app
+    packRequirements: false
+  pythonRequirements:
+    dockerizePip: true
+package:
+  patterns:
+    - backend/**
+```
+
+---
+
+## docs/README.md
+```md
+# Smart Crop Advisory — README
+
+A low-cost, hybrid (edge + lightweight cloud) advisory system for small and marginal farmers. This repo contains:
+- **FastAPI backend** with endpoints for crop, fertilizer, disease (stub), weather, and market prices.
+- **PWA frontend** (vanilla JS) with offline support and basic voice commands.
+- **Telegram bot** (optional) to access the same advisories via chat.
+
+## Quick Start
+
+### 1) Backend
+```bash
+python -m venv .venv && source .venv/bin/activate  # on Windows: .venv\Scripts\activate
+pip install -r backend/requirements.txt
+export OPENWEATHER_API_KEY=YOUR_KEY
+uvicorn backend.app:app --reload
+```
+
+### 2) Frontend
+Serve the static files (any server):
+```bash
+npx serve frontend  # or python -m http.server from inside 'frontend'
+```
+Open http://localhost:3000 or shown URL.
+
+### 3) Telegram Bot (optional)
+```bash
+export TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
+export API_BASE=http://localhost:8000
+python chatbot/telegram_bot.py
+```
+
+## Training / Models
+- Put trained `crop_model.pkl` and `fertilizer_model.pkl` under `backend/models/`.
+- If absent, backend uses heuristics so prototype still runs.
+
+## API
+- `POST /recommend_crop` → `{N,P,K,ph,rainfall}`
+- `POST /recommend_fertilizer` → `{crop,N,P,K,ph}`
+- `POST /detect_disease` → multipart file `file`
+- `GET /weather?pincode=XXXXXX`
+- `GET /market?crop=wheat`
+
+## Deploy
+- **Docker**: `docker build -t sca-backend -f deploy/Dockerfile . && docker run -p 8000:8000 sca-backend`
+- **Serverless**: sample `serverless.yml` provided (adjust for your account).
+
+## Notes
+- Weather requires `OPENWEATHER_API_KEY`.
+- Market prices are mocked; replace with Agmarknet/eNAM official APIs for production.
+- Disease detection here is a heuristic placeholder; swap with TFLite/ONNX model on-device to minimize cloud cost.
+```
+
+---
+
+## docs/SIH_submission.md
+```md
+# SIH Mapping
+
+**Problem:** Smart Crop Advisory for small/marginal farmers.
+
+**Solution Components**
+1. Real-time, location-specific advisory → `/weather`, `/market` + crop/fertilizer endpoints.
+2. Soil health recommendations → fertilizer plan with adjustments and actionable tips.
+3. Weather-based alerts → simple rules on current conditions.
+4. Pest/disease detection → image endpoint (stub) with room for TFLite model.
+5. Market price tracking → mock + integration placeholder.
+6. Voice + Multilingual → Web Speech API now; i18n JSON can be added.
+7. Feedback loop → store usage (add DB if needed: Firebase/SQLite).
+
+**Low-Cost Design**
+- Edge-first: run disease model on-device (TFLite) in future.
+- Serverless/containers for APIs; pay-per-use.
+- PWA for offline caching; no app-store overhead.
