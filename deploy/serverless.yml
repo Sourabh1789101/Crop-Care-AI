@@ -1,0 +1,24 @@
+service: smart-crop-advisory
+provider:
+  name: aws
+  runtime: python3.11
+  region: ap-south-1
+  environment:
+    OPENWEATHER_API_KEY: ${env:OPENWEATHER_API_KEY}
+functions:
+  api:
+    handler: app.app
+    events:
+      - httpApi: '*'
+plugins:
+  - serverless-wsgi
+  - serverless-python-requirements
+custom:
+  wsgi:
+    app: app.app
+    packRequirements: false
+  pythonRequirements:
+    dockerizePip: true
+package:
+  patterns:
+    - backend/**
