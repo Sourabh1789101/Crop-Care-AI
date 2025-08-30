@@ -303,3 +303,4 @@ This project is open source and available under the [MIT License](LICENSE).
 ---
 
 **Built with ❤️ for farmers** | **Low-cost • Scalable • Open Source**
+# Crop-Care-AI
