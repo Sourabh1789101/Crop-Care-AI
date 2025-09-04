@@ -1,0 +1,15 @@
+services/
+deployment/
+docs/
+*.md
+*.txt
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.DS_Store
+test_*.py
+setup.sh

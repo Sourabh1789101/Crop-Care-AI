@@ -131,5 +131,5 @@ async def weather(pincode: str):
         "note": "Mock data - set OPENWEATHER_API_KEY for real data"
     }
 
-# Export for Vercel
-handler = app
+# Export for Vercel - the app itself is the handler
+# Vercel will automatically handle the ASGI app
