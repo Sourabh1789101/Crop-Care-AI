@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
-import numpy as np
 
 # Create FastAPI app
 app = FastAPI(title="Smart Crop Advisory API", version="1.0.0")
