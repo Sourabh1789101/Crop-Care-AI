@@ -2,16 +2,19 @@
   "name": "crop-care-ai",
   "version": "1.0.0",
   "description": "Smart Crop Advisory System - AI-powered agricultural assistance",
-  "main": "api/index.py",
+  "main": "frontend/index.html",
   "scripts": {
     "dev": "python api/index.py",
-    "build": "echo 'Build complete'",
-    "start": "python api/index.py"
+    "build": "echo 'Build complete - static files ready'",
+    "start": "python api/index.py",
+    "vercel-build": "echo 'Vercel build complete'"
   },
-  "keywords": ["agriculture", "ai", "crop", "farming", "advisory"],
+  "keywords": ["agriculture", "ai", "crop", "farming", "advisory", "vercel"],
   "author": "Crop Care AI Team",
   "license": "MIT",
   "engines": {
-    "node": ">=14.x"
-  }
+    "node": ">=16.x"
+  },
+  "devDependencies": {},
+  "dependencies": {}
 }
