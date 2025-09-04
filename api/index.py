@@ -5,8 +5,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'services'))
 
 from app import app
 
-# Export the FastAPI app for Vercel
+# Export the FastAPI app for Vercel (both patterns for compatibility)
 handler = app
+application = app
 
 # For testing locally
 if __name__ == "__main__":
