@@ -1,0 +1,1056 @@
+# Crop-Care-AI — Build, Train, Deploy, Operate (Farmer-First Microservices)
+
+Author: @Sourabh1789101
+Date (UTC): 2025-08-30
+Status: v1.1 (Bots: WhatsApp + Telegram added; clarified model sources; ready for CI/CD)
+
+Overview
+- Farmer value and capabilities
+- Architecture and services (incl. WhatsApp/Telegram bots)
+- Project structure (folders and key files)
+- Environment config (.env)
+- Local development (Docker Compose + manual runs)
+- Datasets and model sources (baseline and training)
+- Model training (disease and yield)
+- Service APIs (stable contracts)
+- Web/mobile apps (farmer interfaces)
+- Bots: WhatsApp and Telegram (setup and webhooks)
+- CI/CD and production (Kubernetes-ready)
+- Security and operations (monitor, logs, backups)
+- Troubleshooting and FAQs
+- Roadmap (phases)
+- Build order (step-by-step)
+- Minimal docker-compose (starter)
+
+------------------------------------------------------------
+1) Farmer Value
+------------------------------------------------------------
+
+Crop-Care-AI provides practical decision support:
+- Detect crop diseases from photos and receive treatment guidance.
+- Predict crop yield based on soil, weather, and crop parameters.
+- Actionable recommendations (fertilizer, irrigation, pest risk, weather alerts).
+- Alerts via push, SMS, WhatsApp, and Telegram.
+- Simple web and mobile apps, with offline-first for low connectivity regions.
+
+Key outcomes:
+- Faster disease identification and treatment
+- Better yield planning and resource allocation
+- Weather-aware, timely actions
+- Lightweight, multi-language, offline-capable experience
+
+------------------------------------------------------------
+2) Architecture (Microservices + Bots)
+------------------------------------------------------------
+
+We use microservices to scale each capability independently. WhatsApp/Telegram bots integrate as first-class channels.
+
+Mermaid overview:
+```mermaid
+flowchart LR
+  subgraph Client
+    A[Mobile App] --- B[Web App]
+    A --- C[SMS/USSD]
+    A --- D[WhatsApp]
+    A --- E[Telegram]
+  end
+
+  subgraph Edge
+    G[API Gateway]
+  end
+
+  subgraph Core Services
+    D1[Disease Detection]
+    Y1[Yield Prediction]
+    R1[Recommendation]
+    N1[Notification]  %% orchestrates push/SMS; bots as separate inbound/outbound services
+    W1[Weather Integration]
+    U1[User Management]
+    A1[Analytics]
+    WB[WhatsApp Bot]
+    TB[Telegram Bot]
+  end
+
+  Client -->|HTTP/JSON| G
+  D -->|Webhook| WB
+  E -->|Webhook| TB
+  G --> D1
+  G --> Y1
+  G --> R1
+  G --> N1
+  G --> W1
+  G --> U1
+  G --> A1
+
+  subgraph Data Layer
+    M[(MongoDB)]
+    Q[(Redis)]
+    S[(Object Storage - images/models)]
+  end
+
+  D1 <-->|results| M
+  Y1 <-->|predictions| M
+  R1 <-->|insights| M
+  U1 <-->|profiles/farms| M
+  N1 --> M
+  W1 --> M
+  A1 --> M
+  D1 --> S
+  D1 --> Q
+  G --> Q
+  WB --> Q
+  TB --> Q
+```
+
+Default ports and responsibilities:
+- api-gateway: Routing/auth/aggregation (8080)
+- services/disease-detection: Image inference + treatments (8001)
+- services/yield-prediction: Yield estimate + bounds (8002)
+- services/recommendation: Prioritized actions (8003)
+- services/notification: Orchestrates push/SMS (8004)
+- services/weather: Weather + ag metrics (8005)
+- services/user-management: Auth/profiles/farms (8006)
+- services/whatsapp-bot: WhatsApp webhook + outbound via Meta Graph API (8011)
+- services/telegram-bot: Telegram webhook + outbound (8012)
+- database: MongoDB, Redis
+- storage: Object storage for images and trained models
+
+Notes:
+- Bots handle inbound messages via webhooks. Outbound messages can be triggered by Notification service or directly by services via Redis queues or HTTP calls through the gateway.
+- For image inference via bots, WhatsApp uses Meta media API; Telegram uses getFile API.
+
+------------------------------------------------------------
+3) Project Structure
+------------------------------------------------------------
+
+```
+crop-care-ai/
+├── api-gateway/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── src/
+│   │   ├── server.js
+│   │   └── routes.json         # proxy map incl. bot webhooks (/webhooks/*)
+│   └── config/
+│       └── default.json
+│
+├── services/
+│   ├── disease-detection/
+│   │   ├── Dockerfile
+│   │   ├── app.py
+│   │   ├── requirements.txt
+│   │   ├── models/
+│   │   └── utils/
+│   │       └── treatments.json
+│   │
+│   ├── yield-prediction/
+│   │   ├── Dockerfile
+│   │   ├── app.py
+│   │   ├── requirements.txt
+│   │   └── models/
+│   │
+│   ├── recommendation/
+│   │   ├── Dockerfile
+│   │   ├── app.py
+│   │   ├── requirements.txt
+│   │   └── utils/
+│   │
+│   ├── notification/
+│   │   ├── Dockerfile
+│   │   ├── app.py
+│   │   ├── requirements.txt
+│   │   └── templates/
+│   │
+│   ├── weather/
+│   │   ├── Dockerfile
+│   │   ├── app.py
+│   │   ├── requirements.txt
+│   │   └── utils/
+│   │
+│   ├── user-management/
+│   │   ├── Dockerfile
+│   │   ├── app.py
+│   │   ├── requirements.txt
+│   │   └── utils/
+│   │
+│   ├── whatsapp-bot/
+│   │   ├── Dockerfile
+│   │   ├── app.py               # webhook + outbound send
+│   │   └── requirements.txt
+│   │
+│   └── telegram-bot/
+│       ├── Dockerfile
+│       ├── app.py               # webhook + outbound send
+│       └── requirements.txt
+│
+├── database/
+│   ├── mongodb/
+│   │   ├── schemas/
+│   │   └── init-scripts/
+│   └── redis/
+│       └── config/
+│
+├── web-app/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── public/
+│   └── src/
+│       ├── components/
+│       ├── pages/
+│       ├── services/
+│       ├── assets/
+│       └── App.js
+│
+├── mobile-app/
+│   ├── package.json
+│   ├── android/
+│   ├── ios/
+│   └── src/
+│       ├── components/
+│       ├── screens/
+│       ├── services/
+│       ├── assets/
+│       └── App.js
+│
+├── sms-service/                 # optional, if using direct SMS provider webhooks
+│   ├── Dockerfile
+│   ├── package.json
+│   └── src/
+│
+├── ml-training/
+│   ├── disease-detection/
+│   │   ├── preprocess.py
+│   │   ├── train.py
+│   │   └── evaluate.py
+│   └── yield-prediction/
+│       ├── preprocess.py
+│       ├── train.py
+│       └── evaluate.py
+│
+├── deployment/
+│   ├── docker-compose.yml
+│   ├── .env.example
+│   └── kubernetes/
+│       ├── config/
+│       ├── services/
+│       ├── deployments/
+│       └── ingress/
+│
+├── docs/
+│   ├── api/
+│   ├── architecture/
+│   ├── bots/
+│   │   └── SETUP.md
+│   ├── ml/
+│   ├── user-guides/
+│   └── development/
+│
+└── tests/
+    ├── unit/
+    ├── integration/
+    └── e2e/
+```
+
+------------------------------------------------------------
+4) Environment Configuration (.env)
+------------------------------------------------------------
+
+Copy deployment/.env.example to deployment/.env and fill values.
+
+Key variables:
+- Core: NODE_ENV, LOG_LEVEL
+- Gateway: API_GATEWAY_PORT, CORS_ORIGINS
+- Services URLs
+- MongoDB/Redis
+- Weather API key(s)
+- Notification (Twilio optional)
+- JWT secrets and TTL
+- Object storage (MinIO/S3)
+- Bots:
+  - WhatsApp (Meta): WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN
+  - Telegram: TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET (optional)
+  - Public base URL for webhooks: PUBLIC_BASE_URL (use ngrok in dev)
+
+Example provided in deployment/.env.example
+
+------------------------------------------------------------
+5) Local Development
+------------------------------------------------------------
+
+Option A — Docker Compose:
+- cd deployment
+- cp .env.example .env (edit values)
+- docker compose up --build
+- Services:
+  - Gateway: http://localhost:8080
+  - Disease: http://localhost:8001
+  - Yield: http://localhost:8002
+  - WhatsApp Bot: http://localhost:8011
+  - Telegram Bot: http://localhost:8012
+  - MongoDB: localhost:27017, Redis: localhost:6379
+
+Option B — Manual (per service):
+- Python FastAPI services:
+  - python -m venv venv && source venv/bin/activate
+  - pip install -r requirements.txt
+  - uvicorn app:app --host 0.0.0.0 --port <port> --reload
+- Node gateway:
+  - npm i
+  - npm run dev
+
+Infra (Docker):
+- Mongo: docker run -d --name mongodb -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=root -e MONGO_INITDB_ROOT_PASSWORD=password mongo:6
+- Redis: docker run -d --name redis -p 6379:6379 redis:7
+
+------------------------------------------------------------
+6) Datasets and Model Sources
+------------------------------------------------------------
+
+Disease images (training):
+- PlantVillage (38 classes):
+  - https://www.kaggle.com/datasets/abdallahalidev/plantvillage-dataset
+- Plant Pathology (Apple): https://www.kaggle.com/c/plant-pathology-2021-fgvc8/data
+- iCassava: https://www.kaggle.com/c/cassava-disease/data
+
+Baseline model (transfer learning):
+- TensorFlow/Keras: MobileNetV2 / EfficientNetB0 via tf.keras.applications
+- PyTorch alternative: timm (e.g., tf_efficientnet_b0_ns) if you prefer PyTorch
+
+Yield data:
+- FAOSTAT: https://www.fao.org/faostat/en/#data
+- USDA NASS: https://www.nass.usda.gov/Data_and_Statistics/
+- India crop production: https://www.kaggle.com/datasets/srinivas1/agricuture-crops-production-in-india
+
+Soil/Weather:
+- ISRIC SoilGrids: https://soilgrids.org/
+- NASA POWER: https://power.larc.nasa.gov/
+
+Where to get “the ML model”:
+- Option 1 (recommended): Train your own with PlantVillage and fine-tune MobileNet/EfficientNet (scripts included in ml-training/).
+- Option 2 (bootstrap): Use a community pre-trained PlantVillage classifier as a starting point, then fine-tune on your local data. Search Kaggle model repositories or TF Hub checkpoints compatible with your class mapping. Ensure license compatibility before production use.
+- Always version models in services/*/models and in object storage (MinIO/S3).
+
+------------------------------------------------------------
+7) Model Training
+------------------------------------------------------------
+
+Disease detection (Keras):
+- Preprocess:
+  - python ml-training/disease-detection/preprocess.py --input-dir /abs/path/plantvillage --output-dir services/disease-detection/data
+- Train:
+  - python ml-training/disease-detection/train.py --data-dir services/disease-detection/data --epochs 30 --batch-size 32 --model-out services/disease-detection/models/disease_detection_model.h5 --classes-out services/disease-detection/models/disease_classes.json
+- Evaluate:
+  - python ml-training/disease-detection/evaluate.py --model services/disease-detection/models/disease_detection_model.h5 --test-dir services/disease-detection/data/validation
+
+Yield prediction (scikit-learn):
+- Preprocess:
+  - python ml-training/yield-prediction/preprocess.py --input-file /abs/path/yield_raw.csv --output-file services/yield-prediction/data/yield_processed.csv
+- Train:
+  - python ml-training/yield-prediction/train.py --data-file services/yield-prediction/data/yield_processed.csv --model-out services/yield-prediction/models/yield_prediction_model.pkl --scaler-out services/yield-prediction/models/yield_scaler.pkl
+- Evaluate:
+  - python ml-training/yield-prediction/evaluate.py --model services/yield-prediction/models/yield_prediction_model.pkl --data-file services/yield-prediction/data/yield_processed.csv
+
+Load on boot (services):
+- Disease: models/disease_detection_model.h5 + disease_classes.json
+- Yield: models/yield_prediction_model.pkl + yield_scaler.pkl
+
+------------------------------------------------------------
+8) Service APIs (Stable Contracts)
+------------------------------------------------------------
+
+Disease Detection (8001)
+- POST /analyze
+  - multipart/form-data: file=image
+  - Response:
+    { "disease": "Rice Blast", "confidence": 0.89, "treatment_recommendations": [...], "top_predictions": [...] }
+
+Yield Prediction (8002)
+- POST /predict
+  - JSON: farm/crop context
+  - Response:
+    { "predicted_yield": { value, unit, lower_bound, upper_bound }, "market_value_estimation": {...}, "recommendations": [...] }
+
+Recommendation (8003)
+- POST /generate
+
+Notification (8004)
+- POST /send, /send-bulk
+- GET /status/{id}
+
+Weather (8005)
+- POST /current, /forecast, /historical, /agricultural-metrics
+
+User Management (8006)
+- POST /token, POST /users, GET /users/me, CRUD /farms
+
+API Gateway (8080)
+- /api/v1/diseases/detect -> disease-detection:/analyze
+- /api/v1/yields/predict -> yield-prediction:/predict
+- /api/v1/recommendations -> recommendation:/generate
+- /api/v1/notifications -> notification:/send
+- /api/v1/weather/forecast -> weather:/forecast
+- /api/v1/auth/token -> user-management:/token
+- Bot webhooks:
+  - /webhooks/whatsapp -> whatsapp-bot:/webhook
+  - /webhooks/telegram -> telegram-bot:/webhook
+
+------------------------------------------------------------
+9) Web and Mobile Apps
+------------------------------------------------------------
+
+Web (React):
+- Targets extension officers and farmers on desktop
+- Connect to API Gateway http://localhost:8080
+- Pages: Dashboard, Disease Detection, Yield Prediction, Farms/Fields, Insights/Reports
+
+Mobile (React Native):
+- Offline-first: local SQLite, image queueing, background sync
+- Flows: Quick detect, Yield estimate, Actions, Settings
+- Offline queue: sync with gateway when online
+
+------------------------------------------------------------
+10) Bots: WhatsApp and Telegram
+------------------------------------------------------------
+
+Why: Provide farmer-friendly channels for inbound questions, disease detection, and yield queries. Supports alerts delivery in addition to app push/SMS.
+
+WhatsApp (Meta WhatsApp Business Cloud API)
+- Env:
+  - WHATSAPP_ACCESS_TOKEN=EAAG... (long-lived)
+  - WHATSAPP_PHONE_NUMBER_ID=1XXXXXXXXX
+  - WHATSAPP_VERIFY_TOKEN=your_webhook_secret
+  - PUBLIC_BASE_URL=https://<your-domain or ngrok>
+- Webhook:
+  - Verify: GET /webhook with hub.challenge and verify_token
+  - Receive: POST /webhook (messages, statuses)
+- Outbound:
+  - POST https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages
+- Set webhook URL in Meta app settings to: PUBLIC_BASE_URL/webhooks/whatsapp
+
+Telegram Bot API
+- Env:
+  - TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+  - TELEGRAM_WEBHOOK_SECRET=optional-shared-secret
+  - PUBLIC_BASE_URL=https://<your-domain or ngrok>
+- Webhook:
+  - Set: https://api.telegram.org/bot<TOKEN>/setWebhook?url=PUBLIC_BASE_URL/webhooks/telegram
+- Outbound:
+  - POST https://api.telegram.org/bot<TOKEN>/sendMessage, sendPhoto, etc.
+
+Command design (MVP):
+- "help" -> show commands
+- "ping" -> "pong"
+- "yield: {...}" -> parses JSON, calls /api/v1/yields/predict, replies with summary
+- Image detection:
+  - WhatsApp: fetch media via Meta media API (requires media ID), forward file to /api/v1/diseases/detect, reply with result
+  - Telegram: getFile -> download -> forward to detection -> reply
+
+See docs/bots/SETUP.md for detailed steps.
+
+------------------------------------------------------------
+11) CI/CD and Production
+------------------------------------------------------------
+
+Pipeline (GitHub Actions):
+- Lint, unit tests
+- Build Docker images per service
+- Push to container registry
+- Apply Kubernetes manifests (staging -> prod) via GitOps or Actions
+
+Kubernetes:
+- config/: ConfigMaps/Secrets (SealedSecrets/External Secrets)
+- services/: ClusterIP/LoadBalancer
+- deployments/: Deployments + HPA
+- ingress/: Ingress routing to gateway and web app
+
+Example:
+- Helm deploy Mongo/Redis (Bitnami)
+- kubectl apply -f deployment/kubernetes/{config,services,deployments,ingress}/
+
+Scaling:
+- Disease: GPU nodes or autoscale by queue/inference RPS
+- Yield: CPU autoscale; cache by (farm,crop,season)
+- Bots: I/O bound; scale by webhook RPS and outbound queue depth
+- MongoDB: indexes, backup daily
+- Gateway: HPA on RPS/CPU; rate limiting per token
+
+------------------------------------------------------------
+12) Security and Operations
+------------------------------------------------------------
+
+Security:
+- JWT auth, rotate secrets, short TTL
+- HTTPS/TLS at ingress
+- Validate image MIME/type/size
+- Encrypt PII at rest; least-privilege DB roles
+- Password hashing: bcrypt/argon2
+- Secret management: Kubernetes Secrets/External Secrets/SealedSecrets
+- Webhooks:
+  - WhatsApp verify_token; validate signatures if enabled
+  - Telegram optional header secret; validate X-Telegram-Bot-Api-Secret-Token
+
+Monitoring & Logging:
+- Prometheus + Grafana (RPS/latency/errors/GPU)
+- Centralized logs (ELK or Loki); JSON logs per service
+- Alert on error rates, p95 latency, queue backlog, low disk, OOM
+
+Backups & DR:
+- Daily MongoDB backups; test restore quarterly
+- Version models; keep last N versions
+- Object storage lifecycle rules
+
+------------------------------------------------------------
+13) Troubleshooting and FAQs
+------------------------------------------------------------
+
+Common issues:
+- TensorFlow OOM: reduce batch size; use MobileNet/EfficientNet-lite; mixed precision
+- CORS: set CORS_ORIGINS; handle OPTIONS in gateway
+- Large image uploads: raise body limits in gateway and FastAPI; client compression
+- Mongo connect: check URI, creds, network policy
+- Low disease accuracy: augmentations; better backbone; class weights; collect local data
+- Yield bias: include region/season; cross-validate; monitor R² drift
+- Bots webhook 403: verify PUBLIC_BASE_URL is HTTPS and reachable; tokens/secrets correct
+
+FAQ:
+- Offline on mobile?
+  - Yes for local history/guidance; cloud inference queued and synced later. On-device inference possible via compressed model variant.
+- Add a new crop?
+  - Extend disease classes + treatments; retrain if needed. Extend yield features; update UI and bot command lists.
+
+------------------------------------------------------------
+14) Build Order (Step-by-Step)
+------------------------------------------------------------
+
+1. Clone repo and create structure
+2. Copy deployment/.env.example -> deployment/.env; fill values (incl. bot tokens)
+3. Start infra (MongoDB, Redis) via Compose
+4. Datasets: download PlantVillage + yield CSV
+5. Run preprocessing (disease, yield)
+6. Train models; place artifacts in services/*/models
+7. docker compose up --build
+8. Expose PUBLIC_BASE_URL via ngrok for dev: ngrok http 8080
+9. Set webhooks:
+   - WhatsApp: Meta App -> Webhooks -> Callback URL: PUBLIC_BASE_URL/webhooks/whatsapp
+   - Telegram: setWebhook to PUBLIC_BASE_URL/webhooks/telegram
+10. Test endpoints and bot commands
+11. Implement CI; push images
+12. Deploy to Kubernetes (staging), then production
+
+------------------------------------------------------------
+15) Minimal docker-compose.yml (Starter)
+------------------------------------------------------------
+
+See deployment/docker-compose.yml in this repo for a ready-to-run setup including bots.
+
+------------------------------------------------------------
+16) Notes on Models and Storage
+------------------------------------------------------------
+
+- Keep artifacts in the service’s models/ folder.
+- In production, load from object storage (MinIO/S3) on boot.
+- Version models: models/disease/v1/model.h5
+- Log model version with predictions for traceability.
+
+------------------------------------------------------------
+17) Roadmap
+------------------------------------------------------------
+
+Phase 1 (Core)
+- User Management, API Gateway, MongoDB/Redis
+- Disease Detection MVP (PlantVillage baseline)
+- Web App disease upload + results
+
+Phase 2 (Yield + Recs)
+- Yield Prediction with regional data
+- Recommendation engine
+- Weather integration
+
+Phase 3 (Channels and UX)
+- Mobile offline-first flows
+- Notifications (push, SMS)
+- WhatsApp and Telegram bots live
+- Localization and low-data mode
+
+Phase 4 (Scale and Ops)
+- CI/CD, observability, backups
+- Model versioning, A/B evaluation
+- GPU autoscaling and cost optimization
+
+------------------------------------------------------------
+License and Contributions
+------------------------------------------------------------
+
+- Add LICENSE
+- Add CODE_OF_CONDUCT.md and CONTRIBUTING.md
+
+Next: I can commit this guide and new bot services on a new branch and open a PR. Say: “Open a PR with the build guide and bots scaffold”.
+
+- deployment/docker-compose.yml
+version: "3.9"
+services:
+  api-gateway:
+    build: ../api-gateway
+    env_file: ./.env
+    ports: ["8080:8080"]
+    depends_on:
+      - disease-detection
+      - yield-prediction
+      - recommendation
+      - notification
+      - weather
+      - user-management
+      - whatsapp-bot
+      - telegram-bot
+      - mongodb
+      - redis
+
+  disease-detection:
+    build: ../services/disease-detection
+    env_file: ./.env
+    ports: ["8001:8001"]
+    volumes:
+      - ../services/disease-detection/models:/app/models:ro
+
+  yield-prediction:
+    build: ../services/yield-prediction
+    env_file: ./.env
+    ports: ["8002:8002"]
+    volumes:
+      - ../services/yield-prediction/models:/app/models:ro
+
+  recommendation:
+    build: ../services/recommendation
+    env_file: ./.env
+    ports: ["8003:8003"]
+
+  notification:
+    build: ../services/notification
+    env_file: ./.env
+    ports: ["8004:8004"]
+
+  weather:
+    build: ../services/weather
+    env_file: ./.env
+    ports: ["8005:8005"]
+
+  user-management:
+    build: ../services/user-management
+    env_file: ./.env
+    ports: ["8006:8006"]
+
+  whatsapp-bot:
+    build: ../services/whatsapp-bot
+    env_file: ./.env
+    ports: ["8011:8011"]
+    depends_on: [api-gateway, redis]
+
+  telegram-bot:
+    build: ../services/telegram-bot
+    env_file: ./.env
+    ports: ["8012:8012"]
+    depends_on: [api-gateway, redis]
+
+  web-app:
+    build: ../web-app
+    env_file: ./.env
+    ports: ["3000:3000"]
+    depends_on: [api-gateway]
+
+  mongodb:
+    image: mongo:6
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports: ["27017:27017"]
+    volumes:
+      - mongo_data:/data/db
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+
+volumes:
+  mongo_data:
+
+
+deployment/.env.example
+# Core
+NODE_ENV=development
+LOG_LEVEL=info
+PUBLIC_BASE_URL=https://example.ngrok.app
+
+# Gateway
+API_GATEWAY_PORT=8080
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# Services URLs
+DISEASE_SERVICE_URL=http://disease-detection:8001
+YIELD_SERVICE_URL=http://yield-prediction:8002
+RECOMMENDATION_SERVICE_URL=http://recommendation:8003
+NOTIFICATION_SERVICE_URL=http://notification:8004
+WEATHER_SERVICE_URL=http://weather:8005
+USER_SERVICE_URL=http://user-management:8006
+
+# MongoDB
+MONGODB_URI=mongodb://root:password@mongodb:27017
+MONGODB_DB=crop_care_ai
+
+# Redis
+REDIS_URL=redis://redis:6379
+
+# Weather API
+WEATHER_API_KEY=replace_me
+
+# Notification (optional SMS)
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
+
+# JWT
+JWT_SECRET=change_this_in_production
+JWT_EXPIRES_MINUTES=60
+
+# Storage
+OBJECT_STORAGE_URL=http://minio:9000
+OBJECT_STORAGE_BUCKET=cropcare
+OBJECT_STORAGE_ACCESS_KEY=minioadmin
+OBJECT_STORAGE_SECRET_KEY=minioadmin
+
+# Training data paths
+PLANTVILLAGE_DIR=/data/plantvillage
+YIELD_DATA_CSV=/data/yield.csv
+
+# Bots - WhatsApp (Meta Cloud API)
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_VERIFY_TOKEN=change_this_webhook_secret
+
+# Bots - Telegram
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=optional_shared_secret
+
+# Gateway base URL for internal calls by bots (inside docker)
+API_GATEWAY_INTERNAL_URL=http://api-gateway:8080
+
+
+api-gateway/src/routes.json
+{
+  "routes": [
+    { "path": "/api/v1/diseases/detect", "target": "http://disease-detection:8001/analyze", "methods": ["POST"] },
+    { "path": "/api/v1/yields/predict", "target": "http://yield-prediction:8002/predict", "methods": ["POST"] },
+    { "path": "/api/v1/recommendations", "target": "http://recommendation:8003/generate", "methods": ["POST"] },
+    { "path": "/api/v1/notifications", "target": "http://notification:8004/send", "methods": ["POST"] },
+    { "path": "/api/v1/weather/forecast", "target": "http://weather:8005/forecast", "methods": ["POST"] },
+    { "path": "/api/v1/auth/token", "target": "http://user-management:8006/token", "methods": ["POST"] },
+
+    { "path": "/webhooks/whatsapp", "target": "http://whatsapp-bot:8011/webhook", "methods": ["GET", "POST"] },
+    { "path": "/webhooks/telegram", "target": "http://telegram-bot:8012/webhook", "methods": ["POST"] }
+  ],
+  "cors": {
+    "origins": ["*"],
+    "methods": ["GET","POST","PUT","DELETE","OPTIONS"],
+    "headers": ["Authorization","Content-Type"]
+  },
+  "bodyParser": { "limit": "10mb" },
+  "rateLimit": { "windowMs": 60000, "max": 120 }
+}
+
+
+services/whatsapp-bot/Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app.py .
+EXPOSE 8011
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8011"]
+
+
+services/whatsapp-bot/requirements.txt
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+httpx==0.27.0
+python-dotenv==1.0.1
+pydantic==2.8.2
+
+
+
+services/whatsapp-bot/app.py
+import os
+import hmac
+import hashlib
+import json
+from typing import Any, Dict, Optional
+
+import httpx
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import PlainTextResponse, JSONResponse
+
+app = FastAPI(title="Crop-Care-AI WhatsApp Bot")
+
+WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+API_GATEWAY_INTERNAL_URL = os.getenv("API_GATEWAY_INTERNAL_URL", "http://api-gateway:8080")
+
+GRAPH_BASE = "https://graph.facebook.com/v17.0"
+
+def w_send_text(to: str, text: str) -> Dict[str, Any]:
+    url = f"{GRAPH_BASE}/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": { "preview_url": False, "body": text }
+    }
+    with httpx.Client(timeout=20) as client:
+        r = client.post(url, headers=headers, json=payload)
+        r.raise_for_status()
+        return r.json()
+
+async def handle_text_message(from_number: str, text: str) -> None:
+    t = text.strip().lower()
+    if t == "help":
+        msg = (
+            "Crop-Care-AI Help:\n"
+            "- Send 'ping' -> pong\n"
+            "- Send 'yield: {json}' to get yield prediction.\n"
+            "  Example:\n"
+            "  yield: {\"crop_type\":\"rice\",\"soil_data\":{\"nitrogen\":40,\"phosphorus\":30,\"potassium\":40,\"ph\":6.5},\"weather_data\":{\"average_temperature\":25,\"total_rainfall\":1000,\"average_humidity\":60}}\n"
+            "- Send an image (coming soon) to detect disease."
+        )
+        w_send_text(from_number, msg)
+        return
+    if t == "ping":
+        w_send_text(from_number, "pong")
+        return
+    if t.startswith("yield:"):
+        try:
+            payload_str = text[text.index(":")+1:].strip()
+            data = json.loads(payload_str)
+        except Exception as e:
+            w_send_text(from_number, f"Invalid JSON after 'yield:'. Error: {e}")
+            return
+        # Call gateway
+        try:
+            with httpx.Client(timeout=60) as client:
+                resp = client.post(f"{API_GATEWAY_INTERNAL_URL}/api/v1/yields/predict", json=data)
+                if resp.status_code >= 400:
+                    w_send_text(from_number, f"Prediction error: {resp.text}")
+                    return
+                pr = resp.json()
+                py = pr.get("predicted_yield", {})
+                value = py.get("value")
+                unit = py.get("unit", "tonnes/ha")
+                lb = py.get("lower_bound")
+                ub = py.get("upper_bound")
+                w_send_text(from_number, f"Predicted yield: {value} {unit} (range {lb}-{ub}).")
+        except Exception as e:
+            w_send_text(from_number, f"Service error: {e}")
+        return
+
+    # default
+    w_send_text(from_number, "Unrecognized command. Send 'help' for options.")
+
+@app.get("/webhook", response_class=PlainTextResponse)
+async def verify(request: Request):
+    # Meta verification
+    params = dict(request.query_params)
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+    if mode == "subscribe" and token == WHATSAPP_VERIFY_TOKEN and challenge:
+        return PlainTextResponse(content=challenge, status_code=200)
+    raise HTTPException(status_code=403, detail="Verification failed")
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    body = await request.json()
+    # Expect standard WhatsApp webhook payload
+    try:
+        entry = body.get("entry", [])[0]
+        changes = entry.get("changes", [])[0]
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
+        for m in messages:
+            from_number = m.get("from")
+            mtype = m.get("type")
+            if mtype == "text":
+                text = m.get("text", {}).get("body", "")
+                await handle_text_message(from_number, text)
+            elif mtype in {"image", "document"}:
+                # TODO: Implement media download using Media API, then forward to disease detection
+                w_send_text(from_number, "Image detection coming soon. Please use the web app for now.")
+            else:
+                w_send_text(from_number, "Unsupported message type.")
+    except Exception as e:
+        # Do not fail webhook; log in real system
+        return JSONResponse({"status": "ignored", "error": str(e)}, status_code=200)
+    return JSONResponse({"status": "ok"}, status_code=200)
+
+
+
+services/telegram-bot/Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app.py .
+EXPOSE 8012
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8012"]
+
+
+
+services/telegram-bot/requirements.txt
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+httpx==0.27.0
+python-dotenv==1.0.1
+pydantic==2.8.2
+
+
+services/telegram-bot/app.py
+import os
+import json
+from typing import Any, Dict
+
+import httpx
+from fastapi import FastAPI, Request, Header, HTTPException
+from fastapi.responses import JSONResponse
+
+app = FastAPI(title="Crop-Care-AI Telegram Bot")
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET")  # optional
+API_GATEWAY_INTERNAL_URL = os.getenv("API_GATEWAY_INTERNAL_URL", "http://api-gateway:8080")
+TG_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+
+def t_send_text(chat_id: int, text: str) -> Dict[str, Any]:
+    with httpx.Client(timeout=20) as client:
+        r = client.post(f"{TG_BASE}/sendMessage", json={"chat_id": chat_id, "text": text})
+        r.raise_for_status()
+        return r.json()
+
+async def handle_text(chat_id: int, text: str):
+    t = text.strip().lower()
+    if t == "help":
+        t_send_text(chat_id, "Commands:\n- ping\n- yield: {json}\n- send a photo to detect disease (coming soon)")
+        return
+    if t == "ping":
+        t_send_text(chat_id, "pong")
+        return
+    if t.startswith("yield:"):
+        try:
+            payload_str = text[text.index(":")+1:].strip()
+            data = json.loads(payload_str)
+        except Exception as e:
+            t_send_text(chat_id, f"Invalid JSON after 'yield:'. Error: {e}")
+            return
+        try:
+            with httpx.Client(timeout=60) as client:
+                resp = client.post(f"{API_GATEWAY_INTERNAL_URL}/api/v1/yields/predict", json=data)
+                if resp.status_code >= 400:
+                    t_send_text(chat_id, f"Prediction error: {resp.text}")
+                    return
+                pr = resp.json()
+                py = pr.get("predicted_yield", {})
+                value = py.get("value")
+                unit = py.get("unit", "tonnes/ha")
+                lb = py.get("lower_bound")
+                ub = py.get("upper_bound")
+                t_send_text(chat_id, f"Predicted yield: {value} {unit} (range {lb}-{ub}).")
+        except Exception as e:
+            t_send_text(chat_id, f"Service error: {e}")
+        return
+    t_send_text(chat_id, "Unrecognized command. Send 'help' for options.")
+
+@app.post("/webhook")
+async def webhook(request: Request, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
+    if TELEGRAM_WEBHOOK_SECRET:
+        if x_telegram_bot_api_secret_token != TELEGRAM_WEBHOOK_SECRET:
+            raise HTTPException(status_code=403, detail="Invalid webhook secret")
+    update = await request.json()
+    try:
+        message = update.get("message") or update.get("edited_message") or {}
+        if message:
+            chat_id = message["chat"]["id"]
+            if "text" in message:
+                await handle_text(chat_id, message["text"])
+            elif "photo" in message:
+                t_send_text(chat_id, "Image detection coming soon. Please use the web app for now.")
+        else:
+            # Handle callbacks, etc., as needed
+            pass
+    except Exception as e:
+        return JSONResponse({"status": "ignored", "error": str(e)}, status_code=200)
+    return JSONResponse({"status": "ok"}, status_code=200)
+
+
+
+docs/bots/SETUP.md
+# Bots Setup (WhatsApp + Telegram)
+
+This guide helps you configure webhooks and tokens for bots.
+
+Prereqs
+- Public HTTPS URL for webhooks:
+  - Dev: use ngrok (ngrok http 8080) and set PUBLIC_BASE_URL in .env
+  - Prod: your Ingress public domain over TLS
+- Docker Compose running (bots on ports 8011, 8012 behind gateway 8080)
+- API_Gateway proxies:
+  - /webhooks/whatsapp -> whatsapp-bot:/webhook
+  - /webhooks/telegram -> telegram-bot:/webhook
+
+WhatsApp (Meta WhatsApp Business Cloud API)
+1. Create a Meta App and enable WhatsApp
+2. Get:
+   - WHATSAPP_ACCESS_TOKEN (long-lived)
+   - WHATSAPP_PHONE_NUMBER_ID
+   - WHATSAPP_VERIFY_TOKEN (choose your own secret)
+3. Set environment in deployment/.env
+4. Webhook:
+   - In Meta App -> WhatsApp -> Configuration:
+     - Callback URL: PUBLIC_BASE_URL/webhooks/whatsapp
+     - Verify Token: WHATSAPP_VERIFY_TOKEN
+   - Subscribe to message categories
+5. Test:
+   - Send "help" to your WhatsApp business number from a test user added in Meta.
+
+Notes:
+- For image detection you must:
+  - Read media ID from webhook payload
+  - GET media URL (needs app secret proof, or auth header)
+  - Download image bytes
+  - POST to /api/v1/diseases/detect
+  - Reply with prediction
+- Ensure your business is approved for “media” permissions in Meta.
+
+Telegram Bot
+1. Create bot with @BotFather
+   - Get TELEGRAM_BOT_TOKEN
+2. Optional: choose TELEGRAM_WEBHOOK_SECRET
+3. Set environment in deployment/.env
+4. Set webhook:
+   - curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+     -H "Content-Type: application/json" \
+     -d "{\"url\":\"$PUBLIC_BASE_URL/webhooks/telegram\",\"secret_token\":\"$TELEGRAM_WEBHOOK_SECRET\"}"
+5. Test:
+   - Open your bot chat, send "help" or "yield: {json}"
+
+Security
+- Restrict webhook exposure to HTTPS only
+- Validate tokens/secrets
+- Consider IP allowlists (Telegram IPs), or WAF for Meta calls
+
+Next Steps
+- Implement media handling for disease detection via both bots
+- Centralize notification fanout via Redis queues
+- Add i18n for farmer languages in responses
+
