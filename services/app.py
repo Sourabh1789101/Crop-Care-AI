@@ -12,7 +12,6 @@ import numpy as np
 
 from utils.soil_helper import fertilizer_plan
 from utils.market_api import get_prices
-from whatsapp_webhook import router as whatsapp_router
 
 # Optional: weather (requires env var OPENWEATHER_API_KEY)
 WEATHER_ENABLED = True
@@ -32,9 +31,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Include WhatsApp webhook router
-app.include_router(whatsapp_router, prefix="/api")
 
 # -------------------- Models -------------------- #
 CROP_MODEL = None

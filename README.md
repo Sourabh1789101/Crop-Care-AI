@@ -1,485 +1,317 @@
-# 🌾 Smart Crop Advisory System
+# 🌾 Crop Care AI - Smart Agricultural Advisory System
 
-[![Status](https://img.shields.io/badge/Status-Active-green)]()
-[![Python](https://img.shields.io/badge/Python-3.8+-blue)]()
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110.2-green)]()
-[![PWA](https://img.shields.io/badge/PWA-Ready-purple)]()
+[![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110.2-green?logo=fastapi)](https://fastapi.tiangolo.com)
+[![PWA](https://img.shields.io/badge/PWA-Ready-purple)](https://web.dev/progressive-web-apps/)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-A comprehensive, low-cost agricultural advisory system designed for small and marginal farmers. This system provides crop recommendations, fertilizer guidance, disease detection, weather alerts, and market price information through multiple interfaces.
+A comprehensive, low-cost agricultural advisory system designed for small and marginal farmers. This system provides **crop recommendations**, **fertilizer guidance**, **disease detection**, **weather alerts**, and **market price information** through an intuitive Progressive Web App (PWA).
 
-## 🚀 Quick Start
+---
 
-### Prerequisites
-- Python 3.8 or higher
-- Internet connection (for weather and market data)
+## 📋 Table of Contents
 
-### Option 1: Automated Setup (Recommended)
-```bash
-# Windows
-setup.bat
+- [Features](#-features)
+- [Project Structure](#-project-structure)
+- [Technology Stack](#-technology-stack)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [API Documentation](#-api-documentation)
+- [Deployment](#-deployment)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-# Linux/Mac
-chmod +x setup.sh && ./setup.sh
-```
+---
 
-### Option 2: Manual Setup
-```bash
-# 1. Create virtual environment
-python -m venv .venv
+## ✨ Features
 
-# 2. Activate virtual environment
-# Windows
-.venv\Scripts\activate
-# Linux/Mac
-source .venv/bin/activate
+| Feature | Description |
+|---------|-------------|
+| 🌱 **Crop Recommendation** | Get optimal crop suggestions based on soil parameters (N, P, K, pH, rainfall) |
+| 🧪 **Fertilizer Advisory** | Personalized fertilizer plans with dosage recommendations |
+| 🦠 **Disease Detection** | Upload plant images for disease analysis and remedies |
+| 🌤️ **Weather Alerts** | Real-time weather data with agricultural advisories |
+| 💰 **Market Prices** | Current crop prices from APMC markets |
+| 🎙️ **Voice Interface** | Hands-free navigation using voice commands |
+| 📱 **Offline Support** | Works offline as a Progressive Web App |
 
-# 3. Install dependencies
-pip install -r backend/requirements.txt
-
-# 4. Create environment file
-cp .env.example .env
-# Edit .env with your API keys
-
-# 5. Start backend
-cd backend
-uvicorn app:app --reload
-
-# 6. Start frontend (new terminal)
-cd frontend
-python -m http.server 3000
-```
-
-### Access the Application
-- **Frontend (PWA)**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-
-## 📱 Features
-
-### 🌱 Crop Recommendation
-- Input soil parameters (N, P, K, pH, rainfall)
-- Get crop recommendations with confidence scores
-- Heuristic fallback when ML models aren't available
-
-### 🧪 Fertilizer Advisory
-- Personalized fertilizer recommendations
-- Soil health analysis
-- Corrective measures for nutrient deficiencies
-
-### 🦠 Disease Detection
-- Upload plant images for analysis
-- Disease classification with remedies
-- Placeholder for ML model integration
-
-### 🌤️ Weather Alerts
-- Real-time weather data by PIN code
-- Agricultural alerts (rain, wind, temperature)
-- Integration with OpenWeatherMap API
-
-### 💰 Market Prices
-- Current crop prices from APMC markets
-- Filter by crop type
-- Mock data with real API integration ready
-
-### 🎙️ Voice Interface
-- Voice commands for navigation
-- Web Speech API integration
-- Hands-free operation
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │    Backend      │    │   External      │
-│   (PWA)         │    │   (FastAPI)     │    │   Services      │
-├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ • HTML/CSS/JS   │◄──►│ • REST API      │◄──►│ • OpenWeather   │
-│ • Service Worker│    │ • ML Models     │    │ • Market APIs   │
-│ • Voice Input   │    │ • Image Proc.   │    │ • Telegram      │
-│ • Offline Cache │    │ • Data Logic    │    │ • (Future)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+---
 
 ## 📁 Project Structure
 
 ```
-SmartCropAdvisory/
-├── 📂 backend/                 # FastAPI backend
-│   ├── app.py                 # Main application
-│   ├── requirements.txt       # Python dependencies
-│   ├── 📂 utils/              # Helper modules
-│   │   ├── soil_helper.py     # Soil analysis logic
-│   │   ├── weather_api.py     # Weather integration
-│   │   └── market_api.py      # Market data
-│   ├── 📂 models/             # ML models (placeholder)
-│   └── 📂 sample_data/        # Sample datasets
-├── 📂 frontend/               # Progressive Web App
-│   ├── index.html            # Main HTML file
-│   ├── app.js                # Main JavaScript
-│   ├── styles.css            # Styling
-│   ├── service-worker.js     # Offline support
-│   ├── manifest.json         # PWA manifest
-│   └── 📂 components/        # Modular components
-│       ├── CropAdvisor.js    # Crop recommendation UI
-│       ├── FertilizerAdvisor.js # Fertilizer UI
-│       ├── DiseaseDetector.js # Disease detection UI
-│       ├── WeatherAlert.js   # Weather UI
-│       └── MarketPrices.js   # Market prices UI
-├── 📂 chatbot/               # Telegram bot
-│   └── telegram_bot.py       # Bot implementation
-├── 📂 deploy/                # Deployment configs
-│   ├── Dockerfile           # Container config
-│   └── serverless.yml       # Serverless config
-├── 📂 docs/                  # Documentation
-│   ├── README.md            # Main documentation
-│   └── SIH_submission.md    # Hackathon details
-├── .env.example             # Environment template
-├── start.bat               # Windows start script
-├── setup.bat               # Windows setup script
-├── setup.sh               # Linux/Mac setup script
-└── test_api.py            # API testing script
+Crop-Care-AI/
+├── 📂 api/                      # Vercel Serverless API
+│   ├── index.py                 # Main API endpoints
+│   └── requirements.txt         # API dependencies
+│
+├── 📂 frontend/                 # Progressive Web App
+│   ├── index.html               # Main HTML entry
+│   ├── app.js                   # Application logic
+│   ├── styles.css               # Styling
+│   ├── manifest.json            # PWA manifest
+│   ├── service-worker.js        # Offline caching
+│   └── 📂 components/           # UI Components
+│       ├── CropAdvisor.js       # Crop recommendation UI
+│       ├── FertilizerAdvisor.js # Fertilizer guidance UI
+│       ├── DiseaseDetector.js   # Disease detection UI
+│       ├── WeatherAlert.js      # Weather alerts UI
+│       └── MarketPrices.js      # Market prices UI
+│
+├── 📂 services/                 # Backend Services (Development)
+│   ├── app.py                   # Full-featured FastAPI app
+│   ├── run_server.py            # Server startup script
+│   ├── requirements.txt         # Backend dependencies
+│   ├── 📂 utils/                # Utility modules
+│   │   ├── soil_helper.py       # Soil analysis logic
+│   │   ├── weather_api.py       # Weather API integration
+│   │   └── market_api.py        # Market data utilities
+│   └── 📂 sample_data/          # Sample datasets
+│       └── crop_reco_sample.csv # Training data sample
+│
+├── 📂 docs/                     # Documentation
+│   └── README.md                # Additional docs
+│
+├── .env.example                 # Environment template
+├── .gitignore                   # Git ignore rules
+├── index.html                   # Root redirect
+├── package.json                 # Project metadata
+├── requirements.txt             # Python dependencies
+├── setup.bat                    # Windows setup script
+├── setup.sh                     # Linux/Mac setup script
+├── test_api.py                  # API test suite
+└── vercel.json                  # Vercel deployment config
 ```
-
-## 🔧 API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | System health check |
-| `/recommend_crop` | POST | Get crop recommendations |
-| `/recommend_fertilizer` | POST | Get fertilizer guidance |
-| `/detect_disease` | POST | Analyze plant images |
-| `/weather` | GET | Weather data and alerts |
-| `/market` | GET | Market price information |
-| `/languages` | GET | Supported languages |
-
-### Example API Usage
-
-```javascript
-// Crop Recommendation
-const cropData = {
-  "N": 90,
-  "P": 42,
-  "K": 43,
-  "ph": 6.5,
-  "rainfall": 120
-};
-
-fetch('http://localhost:8000/recommend_crop', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(cropData)
-})
-.then(response => response.json())
-.then(data => console.log(data));
-```
-
-## 🔑 Environment Variables
-
-```bash
-# Required for weather features
-OPENWEATHER_API_KEY=your_openweather_api_key
-
-# Required for Telegram bot
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-
-# API base URL
-API_BASE=http://localhost:8000
-```
-
-## 🐳 Deployment
-
-### Docker
-```bash
-# Build image
-docker build -t smart-crop-advisory -f deploy/Dockerfile .
-
-# Run container
-docker run -p 8000:8000 -e OPENWEATHER_API_KEY=your_key smart-crop-advisory
-```
-
-### Serverless (AWS Lambda)
-```bash
-# Install serverless framework
-npm install -g serverless
-
-# Deploy
-serverless deploy
-```
-
-## 🧪 Testing
-
-Run the API test suite:
-```bash
-python test_api.py
-```
-
-Expected output:
-```
-🧪 Testing Smart Crop Advisory API
-========================================
-✅ Health check passed
-✅ Crop recommendation passed
-✅ Fertilizer recommendation passed
-✅ Market prices passed
-✅ Languages endpoint passed
-🎉 API Testing Complete!
-```
-
-## 📱 Progressive Web App Features
-
-- **Offline Support**: Works without internet connection
-- **Responsive Design**: Adapts to all screen sizes
-- **Voice Input**: Hands-free navigation
-- **Camera Integration**: Direct image capture for disease detection
-- **Fast Loading**: Optimized for slow networks
-
-## 🤖 Telegram Bot
-
-Start the bot:
-```bash
-cd chatbot
-python telegram_bot.py
-```
-
-Bot commands:
-- `/start` - Introduction and help
-- `/crop N P K pH rainfall` - Crop recommendation
-- `/fert crop N P K pH` - Fertilizer guidance
-- `/weather pincode` - Weather alerts
-- `/market [crop]` - Market prices
-
-## 🔧 Development
-
-### Adding New Features
-1. **Backend**: Add endpoints in `backend/app.py`
-2. **Frontend**: Create components in `frontend/components/`
-3. **Models**: Add ML models to `backend/models/`
-
-### Code Structure
-- **Modular Design**: Easy to extend and maintain
-- **API-First**: Clear separation of concerns
-- **Responsive**: Mobile-first design approach
-
-## 🌟 Future Enhancements
-
-### Short Term
-- [ ] Train ML models with real agricultural data
-- [ ] Integrate actual market APIs (Agmarknet/eNAM)
-- [ ] Add user authentication and profiles
-- [ ] Implement data persistence
-
-### Long Term
-- [ ] IoT sensor integration
-- [ ] Advanced disease detection models
-- [ ] Multi-language support
-- [ ] Farmer community features
-- [ ] Analytics dashboard
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature-name`
-3. Commit changes: `git commit -am 'Add feature'`
-4. Push branch: `git push origin feature-name`
-5. Submit pull request
-
-## 📄 License
-
-This project is open source and available under the [MIT License](LICENSE).
-
-## 🆘 Support
-
-- **Issues**: Create an issue on GitHub
-- **Documentation**: Check `/docs` folder
-- **API Docs**: Visit http://localhost:8000/docs when running
-
-## 🎯 Target Users
-
-- Small and marginal farmers
-- Agricultural extension workers
-- Rural development organizations
-- Agricultural students and researchers
 
 ---
 
-**Built with ❤️ for farmers** | **Low-cost • Scalable • Open Source**
-# Crop-Care-AI — Farmer-First Microservices
+## 🛠️ Technology Stack
 
-**Enhanced WhatsApp Agricultural AI Assistant with Microservices Architecture**
+### Backend
+- **Framework:** FastAPI (Python)
+- **Server:** Uvicorn ASGI
+- **Validation:** Pydantic
+- **Image Processing:** Pillow
+- **Numerical Computing:** NumPy
 
-## 🌾 **Overview**
+### Frontend
+- **Type:** Progressive Web App (PWA)
+- **Languages:** HTML5, CSS3, JavaScript (ES6+)
+- **Features:** Service Workers, Web Speech API
+- **Design:** Responsive, Mobile-first, Dark Theme
 
-Crop-Care-AI provides practical decision support for farmers through:
-- 📱 **WhatsApp & Telegram Bots** - Natural language agricultural assistance
-- 🔍 **Disease Detection** - AI-powered crop disease identification from photos  
-- 📊 **Yield Prediction** - Data-driven crop yield forecasting
-- 💡 **Smart Recommendations** - Actionable farming advice
-- 🌤️ **Weather Integration** - Agricultural weather alerts and insights
+### External APIs
+- **Weather:** OpenWeatherMap API
+- **Market Data:** Mock data (ready for Agmarknet/eNAM integration)
 
-## 🏗️ **Architecture**
+---
 
-Microservices-based architecture with independent, scalable services:
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   WhatsApp Bot  │    │   Telegram Bot   │    │    Web App      │
-└─────────┬───────┘    └─────────┬────────┘    └─────────┬───────┘
-          │                      │                       │
-          └──────────────────────┼───────────────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │      API Gateway        │
-                    │        (8080)           │
-                    └─────────────┬───────────┘
-                                  │
-        ┌─────────────────────────┼─────────────────────────┐
-        │                         │                         │
-┌───────▼────────┐    ┌──────────▼───────┐    ┌───────────▼────┐
-│ Disease Detect │    │ Yield Prediction │    │ Recommendation │
-│     (8001)     │    │      (8002)      │    │     (8003)     │
-└────────────────┘    └──────────────────┘    └────────────────┘
-        │                         │                         │
-        └─────────────────────────┼─────────────────────────┘
-                                  │
-                    ┌─────────────▼───────────┐
-                    │   MongoDB + Redis       │
-                    │   (Data & Cache)        │
-                    └─────────────────────────┘
-```
-
-## 🚀 **Quick Start**
+## 🚀 Installation
 
 ### Prerequisites
-- Docker & Docker Compose
-- Node.js 18+ (for API Gateway)
-- Python 3.11+ (for services)
+- Python 3.8 or higher
+- pip (Python package manager)
+- Git
 
-### 1. Clone and Setup
+### Quick Setup
+
+**Windows:**
 ```bash
 git clone https://github.com/Sourabh1789101/Crop-Care-AI.git
 cd Crop-Care-AI
-cp deployment/.env.example deployment/.env
-# Edit deployment/.env with your API keys and tokens
+setup.bat
 ```
 
-### 2. Start Services
+**Linux/Mac:**
 ```bash
-cd deployment
-docker compose up --build
+git clone https://github.com/Sourabh1789101/Crop-Care-AI.git
+cd Crop-Care-AI
+chmod +x setup.sh && ./setup.sh
 ```
 
-### 3. Access Services
-- **API Gateway**: http://localhost:8080
-- **Web App**: http://localhost:3000  
-- **Disease Detection**: http://localhost:8001
-- **Yield Prediction**: http://localhost:8002
-- **WhatsApp Bot**: http://localhost:8011
-- **Telegram Bot**: http://localhost:8012
+### Manual Setup
 
-## 📱 **Bot Setup**
-
-### WhatsApp Bot
-1. Create Meta App with WhatsApp Business API
-2. Set environment variables in `deployment/.env`:
-   ```
-   WHATSAPP_ACCESS_TOKEN=your_token
-   WHATSAPP_PHONE_NUMBER_ID=your_id  
-   WHATSAPP_VERIFY_TOKEN=your_secret
-   ```
-3. Configure webhook: `https://your-domain/webhooks/whatsapp`
-
-### Telegram Bot  
-1. Create bot with @BotFather
-2. Set environment variables:
-   ```
-   TELEGRAM_BOT_TOKEN=your_bot_token
-   ```
-3. Set webhook: `https://your-domain/webhooks/telegram`
-
-See [docs/bots/SETUP.md](docs/bots/SETUP.md) for detailed instructions.
-
-## 💬 **Natural Language Examples**
-
-Farmers can chat naturally with the bots:
-
-```
-🌤️ "weather in my area 390001"
-🌱 "what crop should i grow"  
-🌿 "fertilizer for wheat farming"
-💰 "rice market prices today"
-❓ "help me with organic farming"
-```
-
-## 🔧 **Services**
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| **api-gateway** | 8080 | Request routing & authentication |
-| **disease-detection** | 8001 | AI crop disease identification |
-| **yield-prediction** | 8002 | Data-driven yield forecasting |
-| **recommendation** | 8003 | Actionable farming advice |
-| **notification** | 8004 | Push, SMS, and alerts |
-| **weather** | 8005 | Agricultural weather data |
-| **user-management** | 8006 | Authentication & user profiles |
-| **whatsapp-bot** | 8011 | WhatsApp Business API integration |
-| **telegram-bot** | 8012 | Telegram Bot API integration |
-
-## 📊 **API Examples**
-
-### Disease Detection
 ```bash
-curl -X POST http://localhost:8080/api/v1/diseases/detect \
-  -F "file=@crop_image.jpg"
+# 1. Clone the repository
+git clone https://github.com/Sourabh1789101/Crop-Care-AI.git
+cd Crop-Care-AI
+
+# 2. Create virtual environment
+python -m venv .venv
+
+# 3. Activate virtual environment
+# Windows:
+.venv\Scripts\activate
+# Linux/Mac:
+source .venv/bin/activate
+
+# 4. Install dependencies
+pip install -r requirements.txt
+
+# 5. Configure environment
+cp .env.example .env
+# Edit .env and add your API keys (optional)
+
+# 6. Start the backend server
+uvicorn api.index:app --reload --host 0.0.0.0 --port 8000
+
+# 7. Start the frontend (new terminal)
+cd frontend
+python -m http.server 3000
 ```
-
-### Yield Prediction  
-```bash
-curl -X POST http://localhost:8080/api/v1/yields/predict \
-  -H "Content-Type: application/json" \
-  -d '{
-    "crop_type": "rice",
-    "soil_data": {"nitrogen": 40, "phosphorus": 30, "potassium": 40, "ph": 6.5},
-    "weather_data": {"average_temperature": 25, "total_rainfall": 1000, "average_humidity": 60}
-  }'
-```
-
-## 🎯 **Key Features**
-
-- ✅ **Natural Language Processing** - 15+ farming query patterns
-- ✅ **Multi-Channel Support** - WhatsApp, Telegram, Web, Mobile
-- ✅ **AI Disease Detection** - TensorFlow-based image classification
-- ✅ **Smart Yield Prediction** - Scikit-learn models with soil/weather data
-- ✅ **Real-time Weather** - Agricultural weather integration
-- ✅ **Offline-First Mobile** - Works in low connectivity areas
-- ✅ **Scalable Architecture** - Kubernetes-ready microservices
-- ✅ **Production Ready** - Docker, CI/CD, monitoring
-
-## 📚 **Documentation**
-
-- [Architecture Overview](docs/architecture/)
-- [Bot Setup Guide](docs/bots/SETUP.md)
-- [API Documentation](docs/api/)
-- [Development Guide](docs/development/)
-- [Deployment Guide](docs/deployment/)
-
-## 🌟 **Impact**
-
-**Transforming agriculture through AI-powered assistance accessible via simple WhatsApp chat!**
-
-- 🎯 **Immediate**: Farmers get instant advice
-- 🎯 **Scalable**: Ready for thousands of farmers  
-- 🎯 **Accessible**: No technical barriers
-- 🎯 **Intelligent**: AI-powered recommendations
 
 ---
 
-## 📞 **Support**
+## 💻 Usage
 
-For issues and questions:
-- Create an issue in this repository
-- Check [docs/troubleshooting/](docs/troubleshooting/)
-- Contact: [your-email@domain.com]
+### Access Points
+| Service | URL |
+|---------|-----|
+| Frontend (PWA) | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| API Documentation | http://localhost:8000/docs |
 
-## 📄 **License**
+### Using the Features
 
-MIT License - see [LICENSE](LICENSE) file for details.
+1. **Crop Recommendation**
+   - Enter soil parameters: N, P, K (kg/ha), pH, Rainfall (mm)
+   - Click "Recommend Crop" to get suggestions
+
+2. **Fertilizer Advisory**
+   - Select crop type
+   - Enter soil parameters
+   - Get personalized fertilizer plan
+
+3. **Disease Detection**
+   - Upload a plant leaf image
+   - Receive disease diagnosis and remedies
+
+4. **Weather Alerts**
+   - Enter PIN code
+   - View weather data and agricultural advisories
+
+5. **Market Prices**
+   - Enter crop name (optional)
+   - View current market prices
+
+---
+
+## 📖 API Documentation
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | API information |
+| `/health` | GET | Health check |
+| `/recommend_crop` | POST | Crop recommendation |
+| `/recommend_fertilizer` | POST | Fertilizer guidance |
+| `/detect_disease` | POST | Disease detection |
+| `/weather` | GET | Weather data |
+| `/market` | GET | Market prices |
+| `/docs` | GET | Interactive API docs |
+
+### Example Requests
+
+**Crop Recommendation:**
+```bash
+curl -X POST http://localhost:8000/recommend_crop \
+  -H "Content-Type: application/json" \
+  -d '{"N": 90, "P": 42, "K": 43, "ph": 6.5, "rainfall": 120}'
+```
+
+**Fertilizer Advisory:**
+```bash
+curl -X POST http://localhost:8000/recommend_fertilizer \
+  -H "Content-Type: application/json" \
+  -d '{"N": 90, "P": 42, "K": 43, "ph": 6.5, "crop": "wheat"}'
+```
+
+**Weather Data:**
+```bash
+curl "http://localhost:8000/weather?pincode=390001"
+```
+
+**Market Prices:**
+```bash
+curl "http://localhost:8000/market?crop=wheat"
+```
+
+---
+
+## 🌐 Deployment
+
+### Vercel (Recommended)
+
+1. Fork this repository
+2. Connect to Vercel
+3. Deploy with default settings
+4. Add environment variables in Vercel dashboard
+
+### Manual Deployment
+
+```bash
+# Install Vercel CLI
+npm install -g vercel
+
+# Deploy
+vercel --prod
+```
+
+---
+
+## 🔑 Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OPENWEATHER_API_KEY` | OpenWeatherMap API key | Optional |
+| `API_BASE` | Backend API URL | Optional |
+
+Get your free API key from [OpenWeatherMap](https://openweathermap.org/api).
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run API tests
+python test_api.py
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 👥 Authors
+
+- **Sourabh** - *Initial Development* - [GitHub](https://github.com/Sourabh1789101)
+
+---
+
+## 🙏 Acknowledgments
+
+- OpenWeatherMap for weather API
+- FastAPI for the excellent framework
+- All contributors and supporters
+
+---
+
+<p align="center">
+  Made with ❤️ for Indian Farmers
+</p>

@@ -4,7 +4,21 @@ import { renderDisease } from './components/DiseaseDetector.js'
 import { renderWeather } from './components/WeatherAlert.js'
 import { renderMarket } from './components/MarketPrices.js'
 
-const API = localStorage.getItem('API_BASE') || (window.location.hostname === 'localhost' ? 'http://localhost:8000' : '/api')
+// Determine API URL based on environment
+function getApiUrl() {
+  // Check if running on Vercel or other hosted platforms
+  const hostname = window.location.hostname;
+  
+  // For local development
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return localStorage.getItem('API_BASE') || 'http://localhost:8000';
+  }
+  
+  // For production (Vercel, Netlify, etc.) - use same origin
+  return window.location.origin;
+}
+
+const API = getApiUrl();
 const view = document.getElementById('view')
 
 function setTab(tab){

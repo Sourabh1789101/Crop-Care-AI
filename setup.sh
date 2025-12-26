@@ -17,7 +17,7 @@ fi
 
 # Install backend dependencies
 echo "📥 Installing backend dependencies..."
-pip install -r backend/requirements.txt
+pip install -r requirements.txt
 
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
@@ -29,10 +29,12 @@ fi
 echo "✅ Setup complete!"
 echo ""
 echo "🚀 To start the backend:"
-echo "   uvicorn backend.app:app --reload"
+echo "   cd services && python run_server.py"
+echo "   OR"
+echo "   uvicorn api.index:app --reload"
 echo ""
 echo "🌐 To start the frontend:"
 echo "   npx serve frontend"
 echo ""
-echo "🤖 To start the Telegram bot:"
-echo "   python chatbot/telegram_bot.py"
+echo "📖 API Documentation:"
+echo "   http://localhost:8000/docs"

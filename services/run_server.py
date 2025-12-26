@@ -17,6 +17,5 @@ if __name__ == "__main__":
     print("📍 Backend directory:", backend_dir)
     print("🔗 Server will be available at: http://127.0.0.1:8000")
     print("📖 API documentation: http://127.0.0.1:8000/docs")
-    print("🤖 WhatsApp status: http://127.0.0.1:8000/api/whatsapp/status")
     
     uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
